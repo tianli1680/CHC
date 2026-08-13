@@ -1,0 +1,65 @@
+name: 筛选并保存CHC频道
+
+on:
+  # 可以手动触发工作流
+  workflow_dispatch:
+  # 也可以设置定时触发，例如每天北京时间上午8点
+  # schedule:
+  #   - cron: '0 22 * * *'  # UTC时间0点，即北京时间8点
+
+jobs:
+  filter-channels:
+    runs-on: ubuntu-latest
+    
+    # 关键：授予写入仓库的权限
+    permissions:
+      contents: write  # 允许写入仓库内容
+    
+    steps:
+      - name: 检出仓库代码
+        uses: actions/checkout@v4
+        with:
+          # 使用GITHUB_TOKEN进行身份验证，确保有写入权限
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: 下载并筛选CHC频道
+        run: |
+          # 下载原始文件
+          echo "正在下载 result.txt..."
+          curl -s -o result.txt https://raw.githubusercontent.com/alantang1977/JunTV/refs/heads/main/output/result.txt
+          
+          # 检查文件是否下载成功
+          if [ ! -s result.txt ]; then
+            echo "错误：文件下载失败或为空！"
+            exit 1
+          fi
+          
+          # 筛选包含"CHC"的行（忽略大小写），并保存到CHC.txt
+          echo "正在筛选包含 'CHC' 的频道..."
+          grep -i "CHC" result.txt > CHC.txt || echo "未找到包含CHC的频道，将创建空文件"
+          
+          # 显示筛选结果统计
+          count=$(wc -l < CHC.txt)
+          echo "筛选完成，共找到 $count 个包含'CHC'的频道。"
+          
+          # 清理临时文件（可选）
+          rm -f result.txt
+          
+      - name: 提交并推送更改
+        run: |
+          # 配置git用户信息
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 检查CHC.txt是否有变化
+          if git diff --quiet CHC.txt; then
+            echo "CHC.txt 没有变化，无需提交。"
+          else
+            # 添加并提交文件
+            git add CHC.txt
+            git commit -m "自动更新CHC频道列表 [skip ci]"
+            
+            # 推送到仓库
+            git push
+            echo "已成功提交并推送更新。"
+          fi
