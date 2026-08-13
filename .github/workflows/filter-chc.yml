@@ -1,65 +1,50 @@
-name: 筛选并保存CHC频道
+name: Filter and Save CHC Channels
 
 on:
-  # 可以手动触发工作流
+  # 允许手动触发工作流
   workflow_dispatch:
-  # 也可以设置定时触发，例如每天北京时间上午8点
-  # schedule:
-  #   - cron: '0 22 * * *'  # UTC时间0点，即北京时间8点
+  # 可设置为定时触发，例如每天北京时间8点运行
+   schedule:
+     - cron: '0 22 * * *'
+
+# 设置仓库写入权限（关键部分）
+permissions:
+  contents: write
 
 jobs:
   filter-channels:
     runs-on: ubuntu-latest
-    
-    # 关键：授予写入仓库的权限
-    permissions:
-      contents: write  # 允许写入仓库内容
-    
     steps:
-      - name: 检出仓库代码
+      # 1. 检出仓库代码，以便后续提交文件
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          # 使用GITHUB_TOKEN进行身份验证，确保有写入权限
-          token: ${{ secrets.GITHUB_TOKEN }}
-          
-      - name: 下载并筛选CHC频道
+
+      # 2. 从远程URL下载原始文件
+      - name: Download source file
         run: |
-          # 下载原始文件
-          echo "正在下载 result.txt..."
-          curl -s -o result.txt https://raw.githubusercontent.com/alantang1977/JunTV/refs/heads/main/output/result.txt
-          
-          # 检查文件是否下载成功
-          if [ ! -s result.txt ]; then
-            echo "错误：文件下载失败或为空！"
-            exit 1
-          fi
-          
-          # 筛选包含"CHC"的行（忽略大小写），并保存到CHC.txt
-          echo "正在筛选包含 'CHC' 的频道..."
-          grep -i "CHC" result.txt > CHC.txt || echo "未找到包含CHC的频道，将创建空文件"
-          
-          # 显示筛选结果统计
-          count=$(wc -l < CHC.txt)
-          echo "筛选完成，共找到 $count 个包含'CHC'的频道。"
-          
-          # 清理临时文件（可选）
-          rm -f result.txt
-          
-      - name: 提交并推送更改
+          curl -L -o source.txt \
+          https://raw.githubusercontent.com/alantang1977/JunTV/refs/heads/main/output/result.txt
+
+      # 3. 核心：筛选包含指定频道名称的行
+      #    注意：此处的grep命令假设result.txt每行是一个频道信息。
+      #    如果格式不同（如JSON、M3U等），需要替换为对应的解析逻辑。
+      - name: Filter channels
         run: |
-          # 配置git用户信息
+          grep -E "CHC家庭影院|CHC动作电影" source.txt > CHC.txt || true
+          # 使用 '|| true' 是为了防止没有匹配项时命令失败导致工作流停止
+
+      # 4. 检查并提交更改（如果CHC.txt存在且不为空）
+      - name: Commit and push changes
+        run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          # 检查CHC.txt是否有变化
-          if git diff --quiet CHC.txt; then
-            echo "CHC.txt 没有变化，无需提交。"
-          else
-            # 添加并提交文件
+          # 检查文件是否存在且非空
+          if [ -s CHC.txt ]; then
             git add CHC.txt
-            git commit -m "自动更新CHC频道列表 [skip ci]"
-            
-            # 推送到仓库
+            # 如果文件有变更或新文件，则提交
+            git commit -m "Update CHC.txt with filtered channels [skip ci]" || echo "No changes to commit"
             git push
-            echo "已成功提交并推送更新。"
+          else
+            echo "No CHC channels found, skipping commit."
           fi
