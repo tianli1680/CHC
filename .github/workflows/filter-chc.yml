@@ -4,7 +4,7 @@ on:
   # 允许手动触发工作流
   workflow_dispatch:
   # 可设置为定时触发，例如每天北京时间8点运行
-   schedule:
+  schedule:
      - cron: '0 22 * * *'
 
 # 设置仓库写入权限（关键部分）
